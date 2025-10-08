@@ -70,14 +70,18 @@ public class RoomService {
 
             roomRepository.save(room);
 
-            // Update administrator’s created rooms
+            // Update administrator's created rooms
             Administrator admin = adminOpt.get();
             updateAdminRooms(admin, roomId);
 
             return new CreateRoomResponse(roomId, request.getRoomName(), "Room created successfully");
 
         } catch (JsonProcessingException e) {
-            return new CreateRoomResponse(null, null, "Error creating room");
+            e.printStackTrace(); // Add logging to see the actual error
+            return new CreateRoomResponse(null, null, "Error creating room: " + e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace(); // Add logging to see the actual error
+            return new CreateRoomResponse(null, null, "Error creating room: " + e.getMessage());
         }
     }
 
@@ -112,7 +116,8 @@ public class RoomService {
             return "Successfully joined room";
 
         } catch (Exception e) {
-            return "Error joining room";
+            e.printStackTrace();
+            return "Error joining room: " + e.getMessage();
         }
     }
 
@@ -166,6 +171,7 @@ public class RoomService {
             return new VoteResponse("Vote cast successfully", true);
 
         } catch (Exception e) {
+            e.printStackTrace();
             return new VoteResponse("Error casting vote: " + e.getMessage(), false);
         }
     }
@@ -199,6 +205,7 @@ public class RoomService {
             );
 
         } catch (Exception e) {
+            e.printStackTrace();
             return null;
         }
     }
@@ -208,30 +215,84 @@ public class RoomService {
     }
 
     private void updateUserRooms(User user, String roomId) throws JsonProcessingException {
-        Map<String, List<String>> roomData = objectMapper.readValue(
-                user.getRoomsJson(),
-                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-        );
+        String roomsJson = user.getRoomsJson();
+        Map<String, List<String>> roomData;
+
+        // Handle null or empty JSON
+        if (roomsJson == null || roomsJson.trim().isEmpty()) {
+            roomData = new HashMap<>();
+            roomData.put("rooms", new ArrayList<>());
+        } else {
+            try {
+                roomData = objectMapper.readValue(
+                        roomsJson,
+                        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
+                );
+                // Ensure "rooms" key exists
+                if (!roomData.containsKey("rooms")) {
+                    roomData.put("rooms", new ArrayList<>());
+                }
+            } catch (JsonProcessingException e) {
+                // If JSON is malformed, create new structure
+                roomData = new HashMap<>();
+                roomData.put("rooms", new ArrayList<>());
+            }
+        }
+
         roomData.get("rooms").add(roomId);
         user.setRoomsJson(objectMapper.writeValueAsString(roomData));
         userRepository.save(user);
     }
 
     private void updateAdminRooms(Administrator admin, String roomId) throws JsonProcessingException {
-        Map<String, List<String>> roomData = objectMapper.readValue(
-                admin.getCreatedRoomsJson(),
-                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-        );
+        String createdRoomsJson = admin.getCreatedRoomsJson();
+        Map<String, List<String>> roomData;
+
+        // Handle null or empty JSON
+        if (createdRoomsJson == null || createdRoomsJson.trim().isEmpty()) {
+            roomData = new HashMap<>();
+            roomData.put("rooms", new ArrayList<>());
+        } else {
+            try {
+                roomData = objectMapper.readValue(
+                        createdRoomsJson,
+                        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
+                );
+                // Ensure "rooms" key exists
+                if (!roomData.containsKey("rooms")) {
+                    roomData.put("rooms", new ArrayList<>());
+                }
+            } catch (JsonProcessingException e) {
+                // If JSON is malformed, create new structure
+                roomData = new HashMap<>();
+                roomData.put("rooms", new ArrayList<>());
+            }
+        }
+
         roomData.get("rooms").add(roomId);
         admin.setCreatedRoomsJson(objectMapper.writeValueAsString(roomData));
         administratorRepository.save(admin);
     }
 
     private boolean hasUserJoinedRoom(User user, String roomId) throws JsonProcessingException {
-        Map<String, List<String>> roomData = objectMapper.readValue(
-                user.getRoomsJson(),
-                objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-        );
-        return roomData.get("rooms").contains(roomId);
+        String roomsJson = user.getRoomsJson();
+
+        // Handle null or empty JSON
+        if (roomsJson == null || roomsJson.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            Map<String, List<String>> roomData = objectMapper.readValue(
+                    roomsJson,
+                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
+            );
+
+            // Check if "rooms" key exists and contains the roomId
+            return roomData.containsKey("rooms") && roomData.get("rooms").contains(roomId);
+        } catch (JsonProcessingException e) {
+            // If JSON is malformed, user hasn't joined any room
+            return false;
+        }
     }
 }
