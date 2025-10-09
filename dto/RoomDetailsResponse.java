@@ -13,12 +13,14 @@ public class RoomDetailsResponse {
     private List<String> partyNames;
     private Map<String, Integer> currentVotes;
     private Boolean isActive;
+    private Boolean isBlocked;
 
     public RoomDetailsResponse() {}
+
     public RoomDetailsResponse(String roomId, String roomName, Integer totalRegistered,
                                LocalDateTime votingStartTime, LocalDateTime votingEndTime,
                                List<String> partyNames, Map<String, Integer> currentVotes,
-                               Boolean isActive) {
+                               Boolean isActive, Boolean isBlocked) {
         this.roomId = roomId;
         this.roomName = roomName;
         this.totalRegistered = totalRegistered;
@@ -27,6 +29,7 @@ public class RoomDetailsResponse {
         this.partyNames = partyNames;
         this.currentVotes = currentVotes;
         this.isActive = isActive;
+        this.isBlocked = isBlocked;
     }
 
     public String getRoomId() { return roomId; }
@@ -45,4 +48,6 @@ public class RoomDetailsResponse {
     public void setCurrentVotes(Map<String, Integer> currentVotes) { this.currentVotes = currentVotes; }
     public Boolean getIsActive() { return isActive; }
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }
+    public Boolean getIsBlocked() { return isBlocked; }
+    public void setIsBlocked(Boolean isBlocked) { this.isBlocked = isBlocked; }
 }

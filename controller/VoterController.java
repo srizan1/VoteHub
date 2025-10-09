@@ -17,27 +17,18 @@ public class VoterController {
     @PostMapping("/join-room")
     public ResponseEntity<String> joinRoom(@RequestBody JoinRoomRequest request) {
         String result = roomService.joinRoom(request);
-        if (result.contains("not found") || result.contains("Error")) {
-            return ResponseEntity.badRequest().body(result);
-        }
         return ResponseEntity.ok(result);
     }
 
     @PostMapping("/vote")
     public ResponseEntity<VoteResponse> castVote(@RequestBody VoteRequest request) {
         VoteResponse response = roomService.castVote(request);
-        if (!response.isSuccess()) {
-            return ResponseEntity.badRequest().body(response);
-        }
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/room/{roomId}")
     public ResponseEntity<RoomDetailsResponse> getRoomDetails(@PathVariable String roomId) {
         RoomDetailsResponse response = roomService.getRoomDetails(roomId);
-        if (response == null) {
-            return ResponseEntity.notFound().build();
-        }
         return ResponseEntity.ok(response);
     }
 }

@@ -32,11 +32,14 @@ public class Room {
 
     private Boolean isActive = true;
 
+    @Column(nullable = false)
+    private Boolean isBlocked = false;
+
     public Room() {}
 
     public Room(String roomId, String roomName, Long adminId, Integer totalRegistered,
                 LocalDateTime votingStartTime, LocalDateTime votingEndTime,
-                String partyVotesJson, String partyNamesJson, Boolean isActive) {
+                String partyVotesJson, String partyNamesJson, Boolean isActive, Boolean isBlocked) {
         this.roomId = roomId;
         this.roomName = roomName;
         this.adminId = adminId;
@@ -46,78 +49,27 @@ public class Room {
         this.partyVotesJson = partyVotesJson;
         this.partyNamesJson = partyNamesJson;
         this.isActive = isActive;
+        this.isBlocked = isBlocked;
     }
 
-    // Getters and setters
-    public String getRoomId() {
-        return roomId;
-    }
-
-    public void setRoomId(String roomId) {
-        this.roomId = roomId;
-    }
-
-    public String getRoomName() {
-        return roomName;
-    }
-
-    public void setRoomName(String roomName) {
-        this.roomName = roomName;
-    }
-
-    public Long getAdminId() {
-        return adminId;
-    }
-
-    public void setAdminId(Long adminId) {
-        this.adminId = adminId;
-    }
-
-    public Integer getTotalRegistered() {
-        return totalRegistered;
-    }
-
-    public void setTotalRegistered(Integer totalRegistered) {
-        this.totalRegistered = totalRegistered;
-    }
-
-    public LocalDateTime getVotingStartTime() {
-        return votingStartTime;
-    }
-
-    public void setVotingStartTime(LocalDateTime votingStartTime) {
-        this.votingStartTime = votingStartTime;
-    }
-
-    public LocalDateTime getVotingEndTime() {
-        return votingEndTime;
-    }
-
-    public void setVotingEndTime(LocalDateTime votingEndTime) {
-        this.votingEndTime = votingEndTime;
-    }
-
-    public String getPartyVotesJson() {
-        return partyVotesJson;
-    }
-
-    public void setPartyVotesJson(String partyVotesJson) {
-        this.partyVotesJson = partyVotesJson;
-    }
-
-    public String getPartyNamesJson() {
-        return partyNamesJson;
-    }
-
-    public void setPartyNamesJson(String partyNamesJson) {
-        this.partyNamesJson = partyNamesJson;
-    }
-
-    public Boolean getIsActive() {
-        return isActive;
-    }
-
-    public void setIsActive(Boolean isActive) {
-        this.isActive = isActive;
-    }
+    public String getRoomId() { return roomId; }
+    public void setRoomId(String roomId) { this.roomId = roomId; }
+    public String getRoomName() { return roomName; }
+    public void setRoomName(String roomName) { this.roomName = roomName; }
+    public Long getAdminId() { return adminId; }
+    public void setAdminId(Long adminId) { this.adminId = adminId; }
+    public Integer getTotalRegistered() { return totalRegistered; }
+    public void setTotalRegistered(Integer totalRegistered) { this.totalRegistered = totalRegistered; }
+    public LocalDateTime getVotingStartTime() { return votingStartTime; }
+    public void setVotingStartTime(LocalDateTime votingStartTime) { this.votingStartTime = votingStartTime; }
+    public LocalDateTime getVotingEndTime() { return votingEndTime; }
+    public void setVotingEndTime(LocalDateTime votingEndTime) { this.votingEndTime = votingEndTime; }
+    public String getPartyVotesJson() { return partyVotesJson; }
+    public void setPartyVotesJson(String partyVotesJson) { this.partyVotesJson = partyVotesJson; }
+    public String getPartyNamesJson() { return partyNamesJson; }
+    public void setPartyNamesJson(String partyNamesJson) { this.partyNamesJson = partyNamesJson; }
+    public Boolean getIsActive() { return isActive; }
+    public void setIsActive(Boolean isActive) { this.isActive = isActive; }
+    public Boolean getIsBlocked() { return isBlocked; }
+    public void setIsBlocked(Boolean isBlocked) { this.isBlocked = isBlocked; }
 }

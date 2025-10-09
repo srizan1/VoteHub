@@ -1,98 +1,128 @@
 package com.voting.system.service;
 
-import com.voting.system.model.Login;
-import com.voting.system.model.User;
-import com.voting.system.model.Administrator;
-import com.voting.system.repository.LoginRepository;
-import com.voting.system.repository.UserRepository;
-import com.voting.system.repository.AdministratorRepository;
-import com.voting.system.dto.LoginRequest;
-import com.voting.system.dto.LoginResponse;
-import com.voting.system.dto.RegisterRequest;
+import com.voting.system.dto.*;
+import com.voting.system.exception.*;
+import com.voting.system.model.*;
+import com.voting.system.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.Optional;
+// CORRECT IMPORT FOR BCrypt
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
+import java.util.regex.Pattern;
 
 @Service
 public class AuthService {
 
-    private final LoginRepository loginRepository;
-    private final UserRepository userRepository;
-    private final AdministratorRepository administratorRepository;
+    @Autowired
+    private LoginRepository loginRepository;
 
-    public AuthService(LoginRepository loginRepository,
-                       UserRepository userRepository,
-                       AdministratorRepository administratorRepository) {
-        this.loginRepository = loginRepository;
-        this.userRepository = userRepository;
-        this.administratorRepository = administratorRepository;
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private AdministratorRepository administratorRepository;
+
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^[0-9]{10,15}$");
+
+    public LoginResponse login(LoginRequest request) {
+        try {
+            // Validate phone number format
+            if (!isValidPhoneNumber(request.getPhoneNumber())) {
+                throw new InvalidRequestException("Invalid phone number format. Must be 10-15 digits.");
+            }
+
+            // Find login
+            Login login = loginRepository.findByPhoneNumber(request.getPhoneNumber())
+                    .orElseThrow(() -> new InvalidCredentialsException("Invalid phone number or password"));
+
+            // Verify password
+            if (!passwordEncoder.matches(request.getPassword(), login.getPasswordHash())) {
+                throw new InvalidCredentialsException("Invalid phone number or password");
+            }
+
+            // Get user ID
+            Long userId;
+            if (login.getLoginType() == Login.LoginType.VOTER) {
+                User user = userRepository.findByPhoneNumber(request.getPhoneNumber())
+                        .orElseThrow(() -> new ResourceNotFoundException("User account not found"));
+                userId = user.getId();
+            } else {
+                Administrator admin = administratorRepository.findByPhoneNumber(request.getPhoneNumber())
+                        .orElseThrow(() -> new ResourceNotFoundException("Administrator account not found"));
+                userId = admin.getId();
+            }
+
+            return new LoginResponse(
+                    "Login successful",
+                    login.getLoginType(),
+                    userId,
+                    request.getPhoneNumber()
+            );
+
+        } catch (InvalidCredentialsException | InvalidRequestException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error during login: " + e.getMessage(), e);
+        }
     }
 
-    public LoginResponse login(LoginRequest loginRequest) {
-        Optional<Login> loginOpt = loginRepository.findByUsername(loginRequest.getUsername());
+    public LoginResponse register(RegisterRequest request) {
+        try {
+            // Validate phone number format
+            if (!isValidPhoneNumber(request.getPhoneNumber())) {
+                throw new InvalidRequestException("Invalid phone number format. Must be 10-15 digits.");
+            }
 
-        if (loginOpt.isEmpty()) {
-            return new LoginResponse("User not found", null, null, null);
+            // Validate password strength
+            if (request.getPassword() == null || request.getPassword().length() < 6) {
+                throw new InvalidRequestException("Password must be at least 6 characters long");
+            }
+
+            // Check if phone number already exists
+            if (loginRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                throw new DuplicateResourceException("Phone number already registered");
+            }
+
+            // Create login
+            Login login = new Login();
+            login.setPhoneNumber(request.getPhoneNumber());
+            login.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            login.setLoginType(request.getLoginType());
+            loginRepository.save(login);
+
+            // Create corresponding user/admin account
+            Long userId;
+            if (request.getLoginType() == Login.LoginType.VOTER) {
+                User user = new User();
+                user.setPhoneNumber(request.getPhoneNumber());
+                user.setRoomsJson("[]");
+                user = userRepository.save(user);
+                userId = user.getId();
+            } else {
+                Administrator admin = new Administrator();
+                admin.setPhoneNumber(request.getPhoneNumber());
+                admin.setCreatedRoomsJson("[]");
+                admin = administratorRepository.save(admin);
+                userId = admin.getId();
+            }
+
+            return new LoginResponse(
+                    "Registration successful",
+                    request.getLoginType(),
+                    userId,
+                    request.getPhoneNumber()
+            );
+
+        } catch (DuplicateResourceException | InvalidRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error during registration: " + e.getMessage(), e);
         }
-
-        Login login = loginOpt.get();
-
-        // Simple password comparison (without encryption for now)
-        if (!loginRequest.getPassword().equals(login.getPasswordHash())) {
-            return new LoginResponse("Invalid password", null, null, null);
-        }
-
-        Long userId = null;
-        if (login.getLoginType() == Login.LoginType.VOTER) {
-            Optional<User> userOpt = userRepository.findByUsername(login.getUsername());
-            userId = userOpt.map(User::getId).orElse(null);
-        } else if (login.getLoginType() == Login.LoginType.ADMINISTRATOR) {
-            Optional<Administrator> adminOpt = administratorRepository.findByUsername(login.getUsername());
-            userId = adminOpt.map(Administrator::getId).orElse(null);
-        }
-
-        return new LoginResponse("Login successful", login.getLoginType(), userId, login.getUsername());
     }
 
-    public LoginResponse register(RegisterRequest registerRequest) {
-        if (loginRepository.existsByUsername(registerRequest.getUsername())) {
-            return new LoginResponse("Username already exists", null, null, null);
-        }
-
-        // Store plain text password (you can add encryption later)
-        String passwordHash = registerRequest.getPassword();
-        Login login = new Login(null, registerRequest.getUsername(), passwordHash, registerRequest.getLoginType());
-        loginRepository.save(login); // Removed unused variable
-
-        Long userId = null;
-        if (registerRequest.getLoginType() == Login.LoginType.VOTER) {
-            User user = new User();
-            user.setUsername(registerRequest.getUsername());
-            user.setRoomsJson("[]");
-            User savedUser = userRepository.save(user);
-            userId = savedUser.getId();
-        } else if (registerRequest.getLoginType() == Login.LoginType.ADMINISTRATOR) {
-            Administrator admin = new Administrator();
-            admin.setUsername(registerRequest.getUsername());
-            admin.setCreatedRoomsJson("[]");
-            Administrator savedAdmin = administratorRepository.save(admin);
-            userId = savedAdmin.getId();
-        }
-
-        return new LoginResponse("Registration successful", registerRequest.getLoginType(), userId, registerRequest.getUsername());
-    }
-
-    // Kept the method as it might be used later
-    public boolean validateUser(Long userId, String username) {
-        Optional<Login> loginOpt = loginRepository.findByUsername(username);
-        if (loginOpt.isEmpty()) return false;
-
-        Login login = loginOpt.get();
-        if (login.getLoginType() == Login.LoginType.VOTER) {
-            Optional<User> userOpt = userRepository.findById(userId);
-            return userOpt.isPresent() && userOpt.get().getUsername().equals(username);
-        } else {
-            Optional<Administrator> adminOpt = administratorRepository.findById(userId);
-            return adminOpt.isPresent() && adminOpt.get().getUsername().equals(username);
-        }
+    private boolean isValidPhoneNumber(String phoneNumber) {
+        return phoneNumber != null && PHONE_PATTERN.matcher(phoneNumber).matches();
     }
 }

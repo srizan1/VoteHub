@@ -6,14 +6,15 @@ public class LoginResponse {
     private String message;
     private Login.LoginType loginType;
     private Long userId;
-    private String username;
+    private String phoneNumber;
 
     public LoginResponse() {}
-    public LoginResponse(String message, Login.LoginType loginType, Long userId, String username) {
+
+    public LoginResponse(String message, Login.LoginType loginType, Long userId, String phoneNumber) {
         this.message = message;
         this.loginType = loginType;
         this.userId = userId;
-        this.username = username;
+        this.phoneNumber = phoneNumber;
     }
 
     public String getMessage() { return message; }
@@ -22,6 +23,6 @@ public class LoginResponse {
     public void setLoginType(Login.LoginType loginType) { this.loginType = loginType; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
 }

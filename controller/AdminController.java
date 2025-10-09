@@ -17,18 +17,18 @@ public class AdminController {
     @PostMapping("/create-room")
     public ResponseEntity<CreateRoomResponse> createRoom(@RequestBody CreateRoomRequest request) {
         CreateRoomResponse response = roomService.createRoom(request);
-        if (response.getRoomId() == null) {
-            return ResponseEntity.badRequest().body(response);
-        }
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/room/{roomId}")
     public ResponseEntity<RoomDetailsResponse> getRoomDetails(@PathVariable String roomId) {
         RoomDetailsResponse response = roomService.getRoomDetails(roomId);
-        if (response == null) {
-            return ResponseEntity.notFound().build();
-        }
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/block-room")
+    public ResponseEntity<String> blockRoom(@RequestBody BlockRoomRequest request) {
+        String message = roomService.blockRoom(request);
+        return ResponseEntity.ok(message);
     }
 }

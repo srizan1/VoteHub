@@ -1,17 +1,14 @@
 package com.voting.system.service;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.voting.system.dto.*;
+import com.voting.system.exception.*;
 import com.voting.system.model.*;
 import com.voting.system.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.time.LocalDateTime;
 import java.util.*;
-
 @Service
 public class RoomService {
 
@@ -28,170 +25,59 @@ public class RoomService {
     private VoteRecordRepository voteRecordRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Transactional
     public CreateRoomResponse createRoom(CreateRoomRequest request) {
         try {
-            Optional<Administrator> adminOpt = administratorRepository.findById(request.getAdminId());
-            if (adminOpt.isEmpty()) {
-                return new CreateRoomResponse(null, null, "Administrator not found");
-            }
+            Administrator admin = administratorRepository.findById(request.getAdminId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Administrator not found with ID: " + request.getAdminId()));
 
-            // Ensure NOTA is in party list
-            if (!request.getPartyNames().contains("NOTA")) {
-                request.getPartyNames().add("NOTA");
-            }
+            if (request.getRoomName() == null || request.getRoomName().trim().isEmpty())
+                throw new InvalidRequestException("Room name cannot be empty");
 
-            // Generate unique room ID
-            String roomId = generateRoomCode();
-            while (roomRepository.existsByRoomId(roomId)) {
-                roomId = generateRoomCode();
-            }
+            if (request.getPartyNames() == null || request.getPartyNames().isEmpty())
+                throw new InvalidRequestException("At least one party name is required");
 
-            // Create room
+            if (request.getVotingEndTime().isBefore(request.getVotingStartTime()))
+                throw new InvalidRequestException("Voting end time must be after start time");
+
+            String roomId = UUID.randomUUID().toString().substring(0, 8);
+
+            Map<String, Integer> partyVotes = new HashMap<>();
+            for (String party : request.getPartyNames())
+                partyVotes.put(party, 0);
+
             Room room = new Room();
             room.setRoomId(roomId);
             room.setRoomName(request.getRoomName());
             room.setAdminId(request.getAdminId());
             room.setVotingStartTime(request.getVotingStartTime());
             room.setVotingEndTime(request.getVotingEndTime());
-
-            // Initialize party votes
-            Map<String, Integer> votes = new HashMap<>();
-            for (String party : request.getPartyNames()) {
-                votes.put(party, 0);
-            }
-            room.setPartyVotesJson(objectMapper.writeValueAsString(votes));
-
-            // Store party names
-            Map<String, List<String>> partyData = new HashMap<>();
-            partyData.put("parties", request.getPartyNames());
-            room.setPartyNamesJson(objectMapper.writeValueAsString(partyData));
-
+            room.setPartyNamesJson(objectMapper.writeValueAsString(request.getPartyNames()));
+            room.setPartyVotesJson(objectMapper.writeValueAsString(partyVotes));
+            room.setIsActive(true);
+            room.setIsBlocked(false);
+            room.setTotalRegistered(0);
             roomRepository.save(room);
 
-            // Update administrator's created rooms
-            Administrator admin = adminOpt.get();
-            updateAdminRooms(admin, roomId);
+            List<String> createdRooms = new ArrayList<>();
+            if (admin.getCreatedRoomsJson() != null && !admin.getCreatedRoomsJson().isEmpty())
+                createdRooms = objectMapper.readValue(admin.getCreatedRoomsJson(), new TypeReference<List<String>>() {});
+            createdRooms.add(roomId);
+            admin.setCreatedRoomsJson(objectMapper.writeValueAsString(createdRooms));
+            administratorRepository.save(admin);
 
             return new CreateRoomResponse(roomId, request.getRoomName(), "Room created successfully");
 
-        } catch (JsonProcessingException e) {
-            e.printStackTrace(); // Add logging to see the actual error
-            return new CreateRoomResponse(null, null, "Error creating room: " + e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace(); // Add logging to see the actual error
-            return new CreateRoomResponse(null, null, "Error creating room: " + e.getMessage());
+            throw new RuntimeException("Error creating room: " + e.getMessage(), e);
         }
     }
-
-    @Transactional
-    public String joinRoom(JoinRoomRequest request) {
-        try {
-            Optional<Room> roomOpt = roomRepository.findByRoomId(request.getRoomId());
-            if (roomOpt.isEmpty()) return "Room not found";
-
-            Optional<User> userOpt = userRepository.findById(request.getUserId());
-            if (userOpt.isEmpty()) return "User not found";
-
-            Room room = roomOpt.get();
-            User user = userOpt.get();
-
-            if (hasUserJoinedRoom(user, request.getRoomId())) {
-                return "Already joined this room";
-            }
-
-            updateUserRooms(user, request.getRoomId());
-
-            room.setTotalRegistered(room.getTotalRegistered() + 1);
-            roomRepository.save(room);
-
-            VoteRecord record = new VoteRecord();
-            record.setUserId(request.getUserId());
-            record.setRoomId(request.getRoomId());
-            record.setHasVoted(false);
-            record.setVotedAt(LocalDateTime.now());
-            voteRecordRepository.save(record);
-
-            return "Successfully joined room";
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "Error joining room: " + e.getMessage();
-        }
-    }
-
-    @Transactional
-    public VoteResponse castVote(VoteRequest request) {
-        try {
-            Optional<Room> roomOpt = roomRepository.findByRoomId(request.getRoomId());
-            if (roomOpt.isEmpty()) {
-                return new VoteResponse("Room not found", false);
-            }
-
-            Room room = roomOpt.get();
-            LocalDateTime now = LocalDateTime.now();
-
-            if (now.isBefore(room.getVotingStartTime())) {
-                return new VoteResponse("Voting has not started yet", false);
-            }
-            if (now.isAfter(room.getVotingEndTime())) {
-                return new VoteResponse("Voting has ended", false);
-            }
-
-            Optional<VoteRecord> recordOpt =
-                    voteRecordRepository.findByUserIdAndRoomId(request.getUserId(), request.getRoomId());
-
-            if (recordOpt.isEmpty()) {
-                return new VoteResponse("User not registered in this room", false);
-            }
-
-            VoteRecord record = recordOpt.get();
-            if (record.getHasVoted()) {
-                return new VoteResponse("You have already voted", false);
-            }
-
-            Map<String, Integer> votes = objectMapper.readValue(
-                    room.getPartyVotesJson(),
-                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Integer.class)
-            );
-
-            if (!votes.containsKey(request.getPartyName())) {
-                return new VoteResponse("Invalid party name", false);
-            }
-
-            votes.put(request.getPartyName(), votes.get(request.getPartyName()) + 1);
-            room.setPartyVotesJson(objectMapper.writeValueAsString(votes));
-            roomRepository.save(room);
-
-            record.setHasVoted(true);
-            record.setVotedAt(LocalDateTime.now());
-            voteRecordRepository.save(record);
-
-            return new VoteResponse("Vote cast successfully", true);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new VoteResponse("Error casting vote: " + e.getMessage(), false);
-        }
-    }
-
     public RoomDetailsResponse getRoomDetails(String roomId) {
         try {
-            Optional<Room> roomOpt = roomRepository.findByRoomId(roomId);
-            if (roomOpt.isEmpty()) return null;
+            Room room = roomRepository.findByRoomId(roomId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Room not found with ID: " + roomId));
 
-            Room room = roomOpt.get();
-
-            Map<String, Integer> votes = objectMapper.readValue(
-                    room.getPartyVotesJson(),
-                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, Integer.class)
-            );
-
-            Map<String, List<String>> partyData = objectMapper.readValue(
-                    room.getPartyNamesJson(),
-                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-            );
+            List<String> partyNames = objectMapper.readValue(room.getPartyNamesJson(), new TypeReference<List<String>>() {});
+            Map<String, Integer> currentVotes = objectMapper.readValue(room.getPartyVotesJson(), new TypeReference<Map<String, Integer>>() {});
 
             return new RoomDetailsResponse(
                     room.getRoomId(),
@@ -199,100 +85,117 @@ public class RoomService {
                     room.getTotalRegistered(),
                     room.getVotingStartTime(),
                     room.getVotingEndTime(),
-                    partyData.get("parties"),
-                    votes,
-                    room.getIsActive()
+                    partyNames,
+                    currentVotes,
+                    room.getIsActive(),
+                    room.getIsBlocked()
             );
+        } catch (Exception e) {
+            throw new RuntimeException("Error retrieving room details: " + e.getMessage(), e);
+        }
+    }
+    public String joinRoom(JoinRoomRequest request) {
+        try {
+            Room room = roomRepository.findByRoomId(request.getRoomId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Room not found with ID: " + request.getRoomId()));
+
+            if (room.getIsBlocked())
+                throw new RoomAccessException("This room is blocked. No new members can join.");
+
+            User user = userRepository.findById(request.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + request.getUserId()));
+
+            List<String> userRooms = new ArrayList<>();
+            if (user.getRoomsJson() != null && !user.getRoomsJson().isEmpty())
+                userRooms = objectMapper.readValue(user.getRoomsJson(), new TypeReference<List<String>>() {});
+
+            if (userRooms.contains(request.getRoomId()))
+                throw new DuplicateResourceException("You have already joined this room");
+
+            userRooms.add(request.getRoomId());
+            user.setRoomsJson(objectMapper.writeValueAsString(userRooms));
+            userRepository.save(user);
+
+            room.setTotalRegistered(room.getTotalRegistered() + 1);
+            roomRepository.save(room);
+
+            VoteRecord voteRecord = new VoteRecord();
+            voteRecord.setUserId(request.getUserId());
+            voteRecord.setRoomId(request.getRoomId());
+            voteRecord.setHasVoted(false);
+            voteRecordRepository.save(voteRecord);
+
+            return "Successfully joined room: " + room.getRoomName();
 
         } catch (Exception e) {
-            e.printStackTrace();
-            return null;
+            throw new RuntimeException("Error joining room: " + e.getMessage(), e);
         }
     }
-
-    private String generateRoomCode() {
-        return UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-    }
-
-    private void updateUserRooms(User user, String roomId) throws JsonProcessingException {
-        String roomsJson = user.getRoomsJson();
-        Map<String, List<String>> roomData;
-
-        // Handle null or empty JSON
-        if (roomsJson == null || roomsJson.trim().isEmpty()) {
-            roomData = new HashMap<>();
-            roomData.put("rooms", new ArrayList<>());
-        } else {
-            try {
-                roomData = objectMapper.readValue(
-                        roomsJson,
-                        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-                );
-                // Ensure "rooms" key exists
-                if (!roomData.containsKey("rooms")) {
-                    roomData.put("rooms", new ArrayList<>());
-                }
-            } catch (JsonProcessingException e) {
-                // If JSON is malformed, create new structure
-                roomData = new HashMap<>();
-                roomData.put("rooms", new ArrayList<>());
-            }
-        }
-
-        roomData.get("rooms").add(roomId);
-        user.setRoomsJson(objectMapper.writeValueAsString(roomData));
-        userRepository.save(user);
-    }
-
-    private void updateAdminRooms(Administrator admin, String roomId) throws JsonProcessingException {
-        String createdRoomsJson = admin.getCreatedRoomsJson();
-        Map<String, List<String>> roomData;
-
-        // Handle null or empty JSON
-        if (createdRoomsJson == null || createdRoomsJson.trim().isEmpty()) {
-            roomData = new HashMap<>();
-            roomData.put("rooms", new ArrayList<>());
-        } else {
-            try {
-                roomData = objectMapper.readValue(
-                        createdRoomsJson,
-                        objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-                );
-                // Ensure "rooms" key exists
-                if (!roomData.containsKey("rooms")) {
-                    roomData.put("rooms", new ArrayList<>());
-                }
-            } catch (JsonProcessingException e) {
-                // If JSON is malformed, create new structure
-                roomData = new HashMap<>();
-                roomData.put("rooms", new ArrayList<>());
-            }
-        }
-
-        roomData.get("rooms").add(roomId);
-        admin.setCreatedRoomsJson(objectMapper.writeValueAsString(roomData));
-        administratorRepository.save(admin);
-    }
-
-    private boolean hasUserJoinedRoom(User user, String roomId) throws JsonProcessingException {
-        String roomsJson = user.getRoomsJson();
-
-        // Handle null or empty JSON
-        if (roomsJson == null || roomsJson.trim().isEmpty()) {
-            return false;
-        }
-
+    public VoteResponse castVote(VoteRequest request) {
         try {
-            Map<String, List<String>> roomData = objectMapper.readValue(
-                    roomsJson,
-                    objectMapper.getTypeFactory().constructMapType(Map.class, String.class, List.class)
-            );
+            Room room = roomRepository.findByRoomId(request.getRoomId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Room not found with ID: " + request.getRoomId()));
 
-            // Check if "rooms" key exists and contains the roomId
-            return roomData.containsKey("rooms") && roomData.get("rooms").contains(roomId);
-        } catch (JsonProcessingException e) {
-            // If JSON is malformed, user hasn't joined any room
-            return false;
+            LocalDateTime now = LocalDateTime.now();
+            if (now.isBefore(room.getVotingStartTime()))
+                throw new VotingException("Voting has not started yet", 425);
+            if (now.isAfter(room.getVotingEndTime()))
+                throw new VotingException("Voting has ended", 410);
+            if (!room.getIsActive())
+                throw new VotingException("This room is no longer active", 403);
+
+            User user = userRepository.findById(request.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + request.getUserId()));
+
+            List<String> userRooms = new ArrayList<>();
+            if (user.getRoomsJson() != null && !user.getRoomsJson().isEmpty())
+                userRooms = objectMapper.readValue(user.getRoomsJson(), new TypeReference<List<String>>() {});
+            if (!userRooms.contains(request.getRoomId()))
+                throw new VotingException("You must join the room before voting", 403);
+
+            VoteRecord voteRecord = voteRecordRepository.findByUserIdAndRoomId(request.getUserId(), request.getRoomId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Vote record not found"));
+
+            if (voteRecord.getHasVoted())
+                throw new VotingException("You have already voted in this room", 409);
+
+            List<String> partyNames = objectMapper.readValue(room.getPartyNamesJson(), new TypeReference<List<String>>() {});
+            if (!partyNames.contains(request.getPartyName()))
+                throw new InvalidRequestException("Invalid party name: " + request.getPartyName());
+
+            Map<String, Integer> partyVotes = objectMapper.readValue(room.getPartyVotesJson(), new TypeReference<Map<String, Integer>>() {});
+            partyVotes.put(request.getPartyName(), partyVotes.get(request.getPartyName()) + 1);
+            room.setPartyVotesJson(objectMapper.writeValueAsString(partyVotes));
+            roomRepository.save(room);
+
+            voteRecord.setHasVoted(true);
+            voteRecord.setVotedAt(LocalDateTime.now());
+            voteRecordRepository.save(voteRecord);
+
+            return new VoteResponse("Vote cast successfully for " + request.getPartyName(), true);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error casting vote: " + e.getMessage(), e);
+        }
+    }
+
+    public String blockRoom(BlockRoomRequest request) {
+        try {
+            Room room = roomRepository.findByRoomId(request.getRoomId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Room not found with ID: " + request.getRoomId()));
+
+            if (!room.getAdminId().equals(request.getAdminId()))
+                throw new RoomAccessException("Only the room creator can block/unblock the room");
+
+            room.setIsBlocked(request.getBlocked());
+            roomRepository.save(room);
+
+            String status = request.getBlocked() ? "blocked" : "unblocked";
+            return "Room successfully " + status + ". " +
+                    (request.getBlocked() ? "No new members can join." : "New members can now join.");
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error updating room status: " + e.getMessage(), e);
         }
     }
 }

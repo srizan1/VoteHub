@@ -1,0 +1,14 @@
+bug fix
+replace the phone number with user name
+unique user registraction
+
+
+
+
+letf optiones
+
+add another option to room that users so room can be blocked
+some error handling
+phone number verification
+public and private key
+finger print
