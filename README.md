@@ -395,60 +395,11 @@ curl -X POST http://localhost:8080/api/admin/create-room \
 - **Vote Integrity**: One vote per user per room enforced at database level
 - **Room Ownership**: Only room creators can modify room settings
 
----
-
-## 🐛 Common Issues & Solutions
-
-### Issue: "Cannot resolve BCryptPasswordEncoder"
-**Solution**: Add Spring Security Crypto dependency in `pom.xml` and reload Maven
-
-### Issue: "Phone number already registered"
-**Solution**: Each phone number can only be registered once. Use a different number or login with existing credentials
-
-### Issue: "Voting has ended" returns 400 instead of 410
-**Solution**: Ensure you're using the updated services with proper exception handling
-
-### Issue: Database connection failed
-**Solution**: Check MySQL is running and credentials in `application.properties` are correct
-
----
-
-## 📝 Future Enhancements
-
-- [ ] JWT token-based authentication
-- [ ] Email/SMS notifications
-- [ ] Real-time vote updates with WebSocket
-- [ ] Admin dashboard with analytics
-- [ ] Voter verification with OTP
-- [ ] Export results to PDF/Excel
-- [ ] Multi-language support
-- [ ] Vote encryption
-
----
-
-## 👥 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
 
 ## 📧 Contact
 
-For questions or support, please contact: [your-email@example.com]
+For questions or support, please contact: srizansairampallapothu@gmail.com
 
----
-
-## 🙏 Acknowledgments
 
 - Spring Boot team for the excellent framework
 - MySQL for reliable database management
