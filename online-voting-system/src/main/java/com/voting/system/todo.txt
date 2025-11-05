@@ -1,0 +1,12 @@
+
+
+
+
+
+letf optiones
+
+no of rooms user is in  ,leave rooom ,
+deleat room , remove user
+phone number verification
+public and private key
+finger print
